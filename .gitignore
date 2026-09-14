@@ -1,0 +1,36 @@
+﻿# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+.venv-1/
+venv/
+env/
+
+# Sensitive config
+config.yaml
+
+# PyInstaller
+build/
+dist/
+*.spec
+
+# IDE
+.vscode/
+.idea/
+
+# System
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Temp
+~$*.xlsx
+
+# Output results
+全套财务测算表.xlsx
+新能源特性分析及容量优化结果表.xlsx

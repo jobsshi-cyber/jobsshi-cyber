@@ -1,0 +1,9 @@
+﻿streamlit
+scipy
+pandas
+numpy
+matplotlib
+openpyxl
+streamlit-authenticator
+PyYAML
+bcrypt
