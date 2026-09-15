@@ -1221,6 +1221,7 @@ def open_parameter_adjustment_window(cap_res, df_8760, params, export_excel_path
 
         soc = bess_e_kwh * 0.5
         curtail_total_kwh = 0.0
+        direct_load_total_kwh = 0.0
         grid_buy_total_kwh = 0.0
         bess_ch_total_kwh = 0.0
         bess_dis_total_kwh = 0.0
@@ -1230,6 +1231,7 @@ def open_parameter_adjustment_window(cap_res, df_8760, params, export_excel_path
             p_wind = wind_kw * df_8760.loc[t, 'wind_norm']
             p_gen = p_pv + p_wind
             p_load = df_8760.loc[t, 'load']
+            direct_load_total_kwh += min(p_gen, p_load)
 
             diff = p_gen - p_load
             if diff > 0:
@@ -1258,7 +1260,8 @@ def open_parameter_adjustment_window(cap_res, df_8760, params, export_excel_path
             'wind_gen_wan': [wind_act_yi * 1e4],
             'bess_dis_wan': [bess_dis_total_kwh / 10000.0],
             'bess_ch_wan': [bess_ch_total_kwh / 10000.0],
-            'curtail_wan': [curtail_yi * 1e4]
+            'curtail_wan': [curtail_yi * 1e4],
+            'direct_load_wan': [direct_load_total_kwh / 10000.0],
         })
 
         sim_info = {

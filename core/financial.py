@@ -52,10 +52,19 @@ def run_financial_evaluation(cap_res, df_sim, params, custom_price_buy=None):
     annual_other     = (total_cap_kw * params['other_cost_rate'])    / 10000.0
     annual_om_fixed  = annual_repair + annual_insurance + annual_labor + annual_material + annual_other
 
-    total_gen_kwh = (df_sim['pv_gen_wan'].sum() + df_sim['wind_gen_wan'].sum()) * 1e4
-    curtail_kwh   = df_sim['curtail_wan'].sum() * 1e4
-    bess_loss_kwh = (df_sim['bess_ch_wan'].sum() - df_sim['bess_dis_wan'].sum()) * 1e4
-    self_use_kwh  = total_gen_kwh - curtail_kwh - bess_loss_kwh
+    if 'direct_load_wan' in df_sim.columns:
+        direct_load_kwh = df_sim['direct_load_wan'].sum() * 1e4
+        storage_supply_kwh = df_sim['bess_dis_wan'].sum() * 1e4
+        self_use_kwh = direct_load_kwh + storage_supply_kwh
+    else:
+        total_gen_kwh = (
+            df_sim['pv_gen_wan'].sum() + df_sim['wind_gen_wan'].sum()
+        ) * 1e4
+        curtail_kwh = df_sim['curtail_wan'].sum() * 1e4
+        bess_loss_kwh = (
+            df_sim['bess_ch_wan'].sum() - df_sim['bess_dis_wan'].sum()
+        ) * 1e4
+        self_use_kwh = total_gen_kwh - curtail_kwh - bess_loss_kwh
     annual_revenue_wan = (self_use_kwh * price_self_use) / 10000.0
 
     N_proj = max(params['N_pv'], params['N_wind'], params['N_bess'])

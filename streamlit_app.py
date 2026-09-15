@@ -26,6 +26,38 @@ from openpyxl.chart import BarChart, LineChart, Reference
 from openpyxl.chart.label import DataLabelList
 from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
 
+UPLOADED_DATA_CACHE_DIR = Path(__file__).resolve().parent
+
+
+def _uploaded_data_cache_path():
+    """为当前登录用户返回持久化上传文件路径。"""
+    username = st.session_state.get("auth_user", "anonymous")
+    safe_username = "".join(
+        character for character in username if character.isalnum() or character in ("-", "_")
+    )
+    return UPLOADED_DATA_CACHE_DIR / f".streamlit_uploaded_data_{safe_username}.xlsx"
+
+# ============================================================
+# 服务协议 / 隐私政策 弹窗
+# 需要 Streamlit >= 1.31
+# ============================================================
+def _load_doc(filename):
+    """读取 docs 目录下的 Markdown 文档"""
+    doc_path = Path(__file__).resolve().parent / "docs" / filename
+    if doc_path.exists():
+        return doc_path.read_text(encoding="utf-8")
+    return f"⚠️ 文档 `{filename}` 未找到，请联系开发者。"
+
+
+@st.dialog("服务使用协议", width="large")
+def _show_terms_dialog():
+    st.markdown(_load_doc("TERMS.md"))
+
+
+@st.dialog("隐私政策", width="large")
+def _show_privacy_dialog():
+    st.markdown(_load_doc("PRIVACY.md"))
+
 
 def _show_protected_text(text: str):
     """显示不可直接选中的结果文本，复制权限由开发者控制。"""
@@ -163,16 +195,274 @@ if DEBUG_SKIP_LOGIN and "auth_user" not in st.session_state:
     st.session_state["auth_user"] = "debug"
 
 if not DEBUG_SKIP_LOGIN and "auth_user" not in st.session_state:
-    st.title("🔐 绿电直连容量优化与财务分析")
-    st.caption(f"许可有效期 {LICENSE_DAYS} 天。如无账号请联系管理员。")
+    login_bg_path = Path(__file__).resolve().parent / "assets" / "login_bg.jpg"
+    login_bg_uri = ""
+    if login_bg_path.exists():
+        login_bg_uri = (
+            "data:image/jpeg;base64,"
+            + base64.b64encode(login_bg_path.read_bytes()).decode("ascii")
+        )
 
-    with st.form("login_form"):
-        _u = st.text_input("用户名")
-        _p = st.text_input("密码", type="password")
-        _ok = st.form_submit_button("登录")
+    intro_path = Path(__file__).resolve().parent / "docs" / "introduction.md"
+    introduction = (
+        intro_path.read_text(encoding="utf-8")
+        if intro_path.exists()
+        else "平台功能介绍暂不可用。"
+    )
+    intro_html_lines = []
+    lines = introduction.splitlines()
+    two_column_sections = {"标准规范", "V1.0 核心功能"}
+    index = 0
+    while index < len(lines):
+        current_line = lines[index].strip()
+        if current_line.startswith("## "):
+            heading = current_line[3:].strip()
+            intro_html_lines.append(f"<h3>{html.escape(heading)}</h3>")
+            index += 1
+            section_lines = []
+            while index < len(lines) and not lines[index].strip().startswith("## "):
+                if lines[index].strip():
+                    section_lines.append(lines[index].strip())
+                index += 1
+            if heading in two_column_sections:
+                items = [
+                    html.escape(item[2:].strip())
+                    for item in section_lines
+                    if item.startswith("- ")
+                ]
+                intro_html_lines.append(
+                    "<div class='intro-grid'>"
+                    + "".join(
+                        f"<div class='intro-item'>• {item}</div>" for item in items
+                    )
+                    + "</div>"
+                )
+            else:
+                for section_line in section_lines:
+                    escaped_line = html.escape(section_line)
+                    if escaped_line.startswith("- "):
+                        intro_html_lines.append(
+                            f"<div class='intro-item'>• {escaped_line[2:]}</div>"
+                        )
+                    else:
+                        intro_html_lines.append(
+                            f"<p>{escaped_line.replace('**', '')}</p>"
+                        )
+            continue
+        escaped_line = html.escape(current_line)
+        if escaped_line.startswith("# "):
+            intro_html_lines.append(f"<h2>{escaped_line[2:]}</h2>")
+        elif escaped_line:
+            intro_html_lines.append(f"<p>{escaped_line.replace('**', '')}</p>")
+        index += 1
+    introduction_html = "".join(intro_html_lines)
+    st.markdown(
+        f"""
+        <style>
+        .stApp {{
+            background-image:
+                linear-gradient(rgba(245, 249, 255, 0.82), rgba(245, 249, 255, 0.82)),
+                url("{login_bg_uri}");
+            background-size: cover;
+            background-position: center;
+            background-attachment: fixed;
+        }}
+        [data-testid="stHeader"], footer {{ visibility: hidden; }}
+        .login-shell {{
+            padding: 1.5rem 2rem 3rem;
+        }}
+        [data-testid="stAppViewContainer"] .main .block-container {{
+            padding-top: 0;
+            padding-bottom: 3rem;
+            max-width: 1500px;
+        }}
+        .login-brand {{
+            color: #123b70;
+            font-size: clamp(2rem, 4vw, 3.8rem);
+            font-weight: 800;
+            letter-spacing: 0.04em;
+            margin: 0 0 0.8rem;
+        }}
+        .login-intro {{
+            max-width: 100%;
+            padding: 2rem 2.4rem 2.2rem;
+            border-radius: 1rem;
+            background: rgba(255, 255, 255, 0.94);
+            color: #2c3e50;
+            line-height: 1.9;
+            box-shadow: 0 12px 40px rgba(31, 78, 121, 0.12);
+            border: 1px solid rgba(61, 131, 230, 0.12);
+            backdrop-filter: blur(8px);
+        }}
+        .login-intro h2 {{
+            font-size: 1.25rem !important;
+            color: #1d4f91 !important;
+            margin: 1.4rem 0 0.2rem !important;
+            padding: 0 0 0.35rem 0 !important;
+            border-bottom: 2px solid rgba(61, 131, 230, 0.18);
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }}
+        .login-intro h2:first-child {{
+            margin-top: 0 !important;
+        }}
+        .login-intro h3 {{
+            font-size: 0.98rem !important;
+            color: #3d83e6 !important;
+            font-weight: 600;
+            margin: 0.9rem 0 0.25rem !important;
+            padding: 0 0 0 0.6rem !important;
+            border-left: 3px solid #3d83e6;
+            background: none !important;
+        }}
+        .login-intro p {{
+            margin: 0.3rem 0 !important;
+            padding: 0 !important;
+            font-size: 0.92rem;
+            line-height: 1.75 !important;
+            color: #4a5a6d;
+        }}
+        .login-intro strong {{
+            color: #1d4f91;
+            font-weight: 700;
+        }}
+        .intro-item {{
+            margin: 0.25rem 0 !important;
+            padding: 0 0 0 0.2rem !important;
+            font-size: 0.92rem;
+            line-height: 1.75 !important;
+            color: #4a5a6d;
+        }}
+        .intro-grid {{
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            column-gap: 1.5rem;
+            row-gap: 0.2rem;
+            align-items: start;
+            margin: 0.3rem 0 0.6rem !important;
+        }}
+        .intro-grid .intro-item {{ min-width: 0; }}
+        .intro-gap {{ height: 0.1rem; }}
+        .login-card {{
+            margin: 0.8rem auto 0;
+            max-width: 390px;
+            padding: 2rem 2.2rem 2.3rem;
+            border-radius: 0.8rem;
+            background: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 14px 40px rgba(31, 78, 121, 0.22);
+        }}
+        [data-testid="stForm"] {{
+            border: 0 !important;
+            padding: 0 !important;
+            background: transparent !important;
+        }}
+        [data-testid="stForm"] > div {{
+            gap: 0.55rem;
+        }}
+        .login-card-title {{
+            color: #1d4f91;
+            font-size: 1.45rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            padding-bottom: 0.9rem;
+            border-bottom: 2px solid rgba(61, 131, 230, 0.15);
+            letter-spacing: 0.05em;
+        }}
+        .st-key-login-card-container {{
+            background: #ffffff !important;
+            border-radius: 1rem;
+            padding: 2rem 2rem 2.2rem;
+            box-shadow: 0 16px 48px rgba(31, 78, 121, 0.16);
+            border: 1px solid rgba(61, 131, 230, 0.1);
+            margin-top: 0 !important;
+        }}
+        [data-testid="stVerticalBlockBorderWrapper"]:has(.st-key-login-card-container) {{
+            background: transparent !important;
+            border: none !important;
+            box-shadow: none !important;
+        }}
+        .st-key-login-page-content {{
+            position: relative;
+            top: -1.5cm;
+        }}
+        .st-key-agreement-link-terms button,
+        .st-key-agreement-link-privacy button {{
+            background: transparent !important;
+            border: 0 !important;
+            color: #3d83e6 !important;
+            padding: 0 !important;
+            min-height: 0 !important;
+            text-decoration: underline;
+            font-size: 0.85rem !important;
+        }}
+        .st-key-agreement-link-terms button:hover,
+        .st-key-agreement-link-privacy button:hover {{
+            color: #1d4f91 !important;
+        }}
+        .login-agreement-warning {{
+            color: #d93025;
+            font-weight: 600;
+            animation: agreement-shake 0.45s ease-in-out 0s 2;
+        }}
+        @keyframes agreement-shake {{
+            0%, 100% {{ transform: translateX(0); }}
+            25% {{ transform: translateX(-5px); }}
+            75% {{ transform: translateX(5px); }}
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    with st.container(key="login-page-content"):
+        st.markdown(
+            '<div class="login-brand">欢迎使用绿电直连源荷匹配优化平台</div>',
+            unsafe_allow_html=True,
+        )
+        left_col, right_col = st.columns([1.35, 1.0], gap="large")
+        with left_col:
+            st.markdown(
+                f'<div class="login-intro">{introduction_html}</div>',
+                unsafe_allow_html=True,
+            )
+        with right_col:
+            with st.container(border=True, key="login-card-container"):
+                st.markdown(
+                    '<div class="login-card-title">🔐 用户登录</div>',
+                    unsafe_allow_html=True,
+                )
+                with st.form("login_form", border=False):
+                    _u = st.text_input("用户名", placeholder="请输入用户名")
+                    _p = st.text_input("密码", type="password", placeholder="请输入密码")
+                    _ok = st.form_submit_button(
+                        "登录", type="primary", use_container_width=True
+                    )
+                _agreement_accepted = st.checkbox(
+                    "登录即代表您同意《服务使用协议》和《隐私政策》",
+                    key="login_agreement_accepted",
+                )
+                if _ok and not _agreement_accepted:
+                    st.markdown(
+                        '<div class="login-agreement-warning">'
+                        "请先勾选并同意《服务使用协议》和《隐私政策》"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
+                link_col1, link_col2 = st.columns(2)
+                with link_col1:
+                    with st.container(key="agreement-link-terms"):
+                        if st.button("《服务使用协议》", key="show_terms"):
+                            _show_terms_dialog()
+                with link_col2:
+                    with st.container(key="agreement-link-privacy"):
+                        if st.button("《隐私政策》", key="show_privacy"):
+                            _show_privacy_dialog()
 
     if _ok:
-        if _u in USERS_HASH and bcrypt.checkpw(_p.encode("utf-8"), USERS_HASH[_u].encode("utf-8")):
+        if not _agreement_accepted:
+            pass
+        elif _u in USERS_HASH and bcrypt.checkpw(_p.encode("utf-8"), USERS_HASH[_u].encode("utf-8")):
             _t = _make_token(_u)
             st.session_state["auth_token"] = _t
             st.session_state["auth_user"] = _u
@@ -290,6 +580,8 @@ with st.sidebar:
                         key=widget_key,
                     )
                 params[key] = value_type(value)
+    if "price_self_use_override" in st.session_state:
+        params["price_self_use"] = st.session_state["price_self_use_override"]
 
 
 # -------------------- 主区：数据上传 --------------------
@@ -314,11 +606,22 @@ else:
 
 if uploaded is not None:
     try:
-        df_8760 = _load_uploaded_workbook(uploaded.getvalue())
+        uploaded_bytes = uploaded.getvalue()
+        df_8760 = _load_uploaded_workbook(uploaded_bytes)
+        _uploaded_data_cache_path().write_bytes(uploaded_bytes)
         st.session_state['df_8760'] = df_8760
         st.success(f"✅ 数据加载成功，共 {len(df_8760)} 小时。")
     except Exception as e:
         st.error(f"❌ 数据读取失败：{e}")
+else:
+    uploaded_data_cache = _uploaded_data_cache_path()
+    if 'df_8760' not in st.session_state and uploaded_data_cache.exists():
+        try:
+            df_8760 = _load_uploaded_workbook(uploaded_data_cache.read_bytes())
+            st.session_state['df_8760'] = df_8760
+            st.info(f"✅ 已恢复上次上传的数据，共 {len(df_8760)} 小时。")
+        except Exception as e:
+            st.error(f"❌ 无法恢复上次上传的数据：{e}")
 
 
 # -------------------- 主区：预分析图表 --------------------
@@ -437,23 +740,20 @@ else:
         st.caption("请先上传 8760 小时数据文件，上传后可展开查看光伏和风电资源特性分析。")
 
 
-# -------------------- 自发自用比例选择 --------------------
-st.subheader("⚙️ 3. 自发自用比例约束")
+# -------------------- 主区：容量配置与计算 --------------------
+st.subheader("🎛️ 3. 容量配置与计算")
 
-col_ratio, _ = st.columns([1, 3])
-with col_ratio:
+# ---- 容量配置子项：自发自用比例约束 ----
+with st.container(border=True):
+    st.markdown("**自发自用比例约束**")
     self_use_option = st.radio(
-        "新能源年自发自用电量 / 负荷总用电量 的最低比例：",
+        "新能源年自发自用电量 / 负荷总用电量的最低比例：",
         options=["30%（2030 年前适用）", "35%（2030 年起适用）"],
         index=0,
-        horizontal=False,
+        horizontal=True,
         help="政策要求：2030 年前最低 30%；2030 年起最低 35%。",
     )
-
 load_self_use_ratio = 0.30 if self_use_option.startswith("30") else 0.35
-
-# -------------------- 主区：容量配置与计算 --------------------
-st.subheader("🎛️ 4. 容量配置与计算")
 
 # ---- 初始化 session_state ----
 if 'pv_wan_input' not in st.session_state:
@@ -464,6 +764,13 @@ if 'bess_p_wan_input' not in st.session_state:
     st.session_state['bess_p_wan_input'] = 0.0
 if 'bess_h_input' not in st.session_state:
     st.session_state['bess_h_input'] = 2.0
+if "price_self_use_override" in st.session_state:
+    st.session_state["price_self_use_capacity"] = st.session_state[
+        "price_self_use_override"
+    ]
+    st.session_state.pop("price_self_use_override")
+if 'price_self_use_capacity' not in st.session_state:
+    st.session_state['price_self_use_capacity'] = float(params['price_self_use'])
 
 # ---- ★ 关键：在 widget 渲染之前，应用上一次优化结果 ----
 if '_opt_result' in st.session_state:
@@ -486,12 +793,126 @@ with st.form("capacity_form"):
     with col4:
         bess_h = st.number_input("储能时长 (小时)", step=0.5, key="bess_h_input")
 
+    price_col, _ = st.columns([1, 3])
+    with price_col:
+        self_use_price = st.number_input(
+            "自发自用电价 (元/kWh)",
+            min_value=0.0,
+            step=0.01,
+            format="%.4f",
+            key="price_self_use_capacity",
+        )
+
     st.write("")
     col_a, col_b = st.columns(2)
     with col_a:
         run_calc = st.form_submit_button("🔧 手动计算", type="primary", use_container_width=True)
     with col_b:
         run_auto = st.form_submit_button("🚀 自动优化", use_container_width=True)
+
+# 容量配置中的电价输入是财务计算的统一数据源。
+params["price_self_use"] = self_use_price
+
+# ---- 容量配置子项：资本金内部收益率反算自发自用电价 ----
+with st.container(border=True):
+    st.markdown("**资本金内部收益率测算自发自用电价**")
+    irr_col, price_col, button_col = st.columns([1, 1, 1])
+    with irr_col:
+        target_equity_irr = st.number_input(
+            "目标资本金 IRR (%)", min_value=-90.0, max_value=200.0,
+            value=8.0, step=0.5, format="%.2f",
+            key="target_equity_irr",
+        )
+    with price_col:
+        st.number_input(
+            "当前自发自用电价 (元/kWh)",
+            value=float(self_use_price),
+            min_value=0.0, step=0.01, format="%.4f",
+            disabled=True,
+        )
+    with button_col:
+        st.markdown(
+            "<div style='height: 28px;'></div>",
+            unsafe_allow_html=True,
+        )
+        calculate_price = st.button(
+            "收益率 → 电价", use_container_width=True
+        )
+
+if calculate_price:
+    if "df_8760" not in st.session_state:
+        st.error("请先上传 8760 小时数据文件。")
+    else:
+        target_irr = target_equity_irr / 100.0
+        price_cap_res = {
+            "PV_kW": pv_wan * 10000.0,
+            "Wind_kW": wind_wan * 10000.0,
+            "BESS_kW": bess_p_wan * 10000.0,
+            "BESS_kWh": bess_p_wan * 10000.0 * bess_h,
+        }
+        with st.spinner("正在根据目标资本金 IRR 反算自发自用电价..."):
+            price_dispatch = simulate_8760(
+                st.session_state["df_8760"], price_cap_res, params
+            )
+            price_df_sim = pd.DataFrame({
+                "pv_gen_wan": [price_dispatch["pv_gen_wan"].sum()],
+                "wind_gen_wan": [price_dispatch["wind_gen_wan"].sum()],
+                "bess_dis_wan": [price_dispatch["bess_dis_wan"].sum()],
+                "bess_ch_wan": [price_dispatch["bess_ch_wan"].sum()],
+                "curtail_wan": [price_dispatch["curtail_wan"].sum()],
+                "direct_load_wan": [price_dispatch["direct_load_wan"].sum()],
+            })
+            # 先扫描电价区间寻找实际的 IRR 单调交叉区间。
+            # 极低电价下 IRR 可能落在财务模型的上限，不能直接把
+            # 0.001 和 10.0 作为二分端点，否则结果会被端点锁死。
+            price_grid = np.linspace(0.001, 10.0, 201)
+            irr_grid = []
+            for candidate_price in price_grid:
+                candidate_result = run_financial_evaluation(
+                    price_cap_res,
+                    price_df_sim,
+                    params,
+                    custom_price_buy=float(candidate_price),
+                )
+                irr_grid.append(candidate_result["irr_equity"])
+
+            bracket = None
+            for index in range(len(price_grid) - 1):
+                left_irr = irr_grid[index]
+                right_irr = irr_grid[index + 1]
+                if left_irr <= target_irr <= right_irr:
+                    bracket = (
+                        float(price_grid[index]),
+                        float(price_grid[index + 1]),
+                        left_irr,
+                        right_irr,
+                    )
+                    break
+
+            if bracket is None:
+                st.error(
+                    "当前容量、数据和财务参数下未找到目标资本金 IRR 对应的电价区间，"
+                    "请调整目标 IRR 或容量配置。"
+                )
+            else:
+                low, high, low_irr, high_irr = bracket
+                # 与 desktop_app.py 一致使用二分法；这里保留有效区间，
+                # 避免固定端点造成不同数据得到相同电价。
+                for _ in range(40):
+                    mid = (low + high) / 2.0
+                    mid_res = run_financial_evaluation(
+                        price_cap_res,
+                        price_df_sim,
+                        params,
+                        custom_price_buy=mid,
+                    )
+                    if mid_res["irr_equity"] < target_irr:
+                        low = mid
+                    else:
+                        high = mid
+                st.session_state["price_self_use_override"] = high
+                st.success(f"反算完成：自发自用电价 = {high:.4f} 元/kWh")
+                st.rerun()
 
 # ---- 自动优化按钮逻辑 ----
 # ---- 显示上一次自动优化的成功提示 ----
@@ -518,6 +939,7 @@ if run_auto:
             'bess_dis_wan': [dispatch_df_opt['bess_dis_wan'].sum()],
             'bess_ch_wan':  [dispatch_df_opt['bess_ch_wan'].sum()],
             'curtail_wan':  [dispatch_df_opt['curtail_wan'].sum()],
+            'direct_load_wan': [dispatch_df_opt['direct_load_wan'].sum()],
         })
 
         # 3. 立即执行财务评估（这一步让指标能显示）
@@ -563,6 +985,7 @@ if run_calc:
                 'bess_dis_wan':[dispatch_df['bess_dis_wan'].sum()],
                 'bess_ch_wan': [dispatch_df['bess_ch_wan'].sum()],
                 'curtail_wan': [dispatch_df['curtail_wan'].sum()],
+                'direct_load_wan': [dispatch_df['direct_load_wan'].sum()],
             })
             fin_res = run_financial_evaluation(cap_res, df_sim, params)
 
@@ -577,19 +1000,23 @@ if 'fin_res' in st.session_state:
     fin_res = st.session_state['fin_res']
     dispatch_df = st.session_state['dispatch_df']
 
-    st.subheader("📈 5. 运营指标")
+    st.subheader("📈 4. 运营指标")
 
     total_load = dispatch_df['load_wan'].sum()
-    self_use = dispatch_df['pv_gen_wan'].sum() + dispatch_df['wind_gen_wan'].sum() \
-               - dispatch_df['curtail_wan'].sum() \
-               - (dispatch_df['bess_ch_wan'].sum() - dispatch_df['bess_dis_wan'].sum())
+    self_use = (
+        dispatch_df['direct_load_wan'].sum()
+        + dispatch_df['bess_dis_wan'].sum()
+    )
     grid_buy = dispatch_df['grid_buy_wan'].sum()
     curtail = dispatch_df['curtail_wan'].sum()
 
     pv_theory = st.session_state['cap_res']['PV_kW'] * st.session_state['df_8760']['pv_norm'].sum()
     wind_theory = st.session_state['cap_res']['Wind_kW'] * st.session_state['df_8760']['wind_norm'].sum()
-    pv_actual = dispatch_df['pv_gen_wan'].sum() * 1e4
-    wind_actual = dispatch_df['wind_gen_wan'].sum() * 1e4
+    pv_actual = dispatch_df['pv_actual_wan'].sum() * 1e4
+    wind_actual = dispatch_df['wind_actual_wan'].sum() * 1e4
+    direct_load = dispatch_df['direct_load_wan'].sum() * 1e4
+    storage_supply = dispatch_df['bess_dis_wan'].sum() * 1e4
+    renewable_generation = pv_actual + wind_actual
     operation_text = (
         f"光伏年理论发电量 : {pv_theory / 1e8:>12.4f} 亿kWh | 理论利用小时数 : "
         f"{pv_theory / max(st.session_state['cap_res']['PV_kW'], 1e-9):>8.1f} h\n"
@@ -600,16 +1027,17 @@ if 'fin_res' in st.session_state:
         f"风电年实际发电量 : {wind_actual / 1e8:>12.4f} 亿kWh | 实际利用小时数 : "
         f"{wind_actual / max(st.session_state['cap_res']['Wind_kW'], 1e-9):>8.1f} h\n"
         f"年总弃电量       : {curtail / 1e4:>12.4f} 亿kWh | 综合弃电率     : "
-        f"{curtail / max((pv_actual + wind_actual), 1e-9) * 100:>8.2f} %\n"
-        f"自发自用电量     : {self_use / 1e4:>12.4f} 亿kWh | 电网补充购电量 : "
+        f"{curtail * 1e4 / max(renewable_generation, 1e-9) * 100:>8.2f} %\n"
+        f"新能源直供负荷电量 : {direct_load / 1e8:>10.4f} 亿kWh | 储能供负荷电量 : "
+        f"{storage_supply / 1e8:>10.4f} 亿kWh\n"
+        f"年自发自用电量   : {self_use / 1e4:>12.4f} 亿kWh | 电网补充购电量 : "
         f"{grid_buy / 1e4:>8.4f} 亿kWh\n"
         f"自发自用电量占比 : {self_use / max(total_load, 1e-9) * 100:>12.2f} % | 用户全年总用电量 : "
         f"{total_load / 1e4:>8.4f} 亿kWh"
     )
     _show_protected_text(operation_text)
-    st.caption("如需复制运营指标，请联系开发者获取权限。")
 
-    st.subheader("💰 6. 财务指标")
+    st.subheader("💰 5. 财务指标")
     finance_text = (
         f"总投资（动态）                 : {fin_res['total_project_inv_wan'] / 10000:.4f} 亿元\n"
         f"总投资（静态）                 : {fin_res['total_static_inv_wan'] / 10000:.4f} 亿元\n"
@@ -621,11 +1049,9 @@ if 'fin_res' in st.session_state:
         f"资本金内部收益率               : {fin_res['irr_equity'] * 100:.2f} %"
     )
     _show_protected_text(finance_text)
-    st.caption("如需复制财务指标，请联系开发者获取权限。")
 
     # ---------------- 财务详细数据表 ----------------
     with st.expander("📋 查看详细数据表"):
-        st.info("详细数据表仅供查看。如需下载数据，请联系开发者获取权限。")
         tab1, tab2, tab3 = st.tabs(["总成本费用表", "利润与利润分配表", "现金流量表"])
         with tab1:
             st.dataframe(fin_res['df_cost'], use_container_width=True)
@@ -635,7 +1061,7 @@ if 'fin_res' in st.session_state:
             st.dataframe(fin_res['cash_flow_df'], use_container_width=True)
 else:
     # 计算前也保留指标区域，并显示与默认容量配置对应的初始值。
-    st.subheader("📈 5. 运营指标")
+    st.subheader("📈 4. 运营指标")
     default_operation_text = (
         "光伏年理论发电量 :       0.0000 亿kWh | 理论利用小时数 :      0.0 h\n"
         "光伏年实际发电量 :       0.0000 亿kWh | 实际利用小时数 :      0.0 h\n"
@@ -646,10 +1072,8 @@ else:
         "自发自用电量占比 :          0.00 % | 用户全年总用电量 :      0.0000 亿kWh"
     )
     _show_protected_text(default_operation_text)
-    st.caption("当前显示为默认值。执行手动计算或自动优化后将刷新为实际结果。")
-    st.caption("如需复制运营指标，请联系开发者获取权限。")
 
-    st.subheader("💰 6. 财务指标")
+    st.subheader("💰 5. 财务指标")
     default_finance_text = (
         "总投资（动态）                 : 0.0000 亿元\n"
         "总投资（静态）                 : 0.0000 亿元\n"
@@ -661,11 +1085,9 @@ else:
         "资本金内部收益率               : 0.00 %"
     )
     _show_protected_text(default_finance_text)
-    st.caption("当前显示为默认值。执行手动计算或自动优化后将刷新为实际结果。")
-    st.caption("如需复制财务指标，请联系开发者获取权限。")
 
 # -------------------- 输配电费及年平均到户电价计算 --------------------
-st.subheader("⚡ 7. 输配电费及年平均到户电价计算")
+st.subheader("⚡ 6. 输配电费及年平均到户电价计算")
 
 from core import PROVINCES, TARIFF_DATA, calc_monthly_tariff_fee
 
@@ -753,10 +1175,10 @@ if calculate_tariff:
                 dispatch['pv_gen_wan'].sum() + dispatch['wind_gen_wan'].sum()
             ) * 1e4
             curtail_kwh = dispatch['curtail_wan'].sum() * 1e4
-            bess_loss_kwh = (
-                dispatch['bess_ch_wan'].sum() - dispatch['bess_dis_wan'].sum()
+            self_use_kwh = (
+                dispatch['direct_load_wan'].sum()
+                + dispatch['bess_dis_wan'].sum()
             ) * 1e4
-            self_use_kwh = total_generation - curtail_kwh - bess_loss_kwh
         else:
             self_use_kwh = 0.0
         avg_price = calc_user_avg_price(
@@ -770,7 +1192,6 @@ if calculate_tariff:
         )
 
         st.success("✅ 计算完成！")
-        st.caption("输配电费及年平均到户电价结果仅供查看。如需复制结果，请联系开发者获取权限。")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("输配电电度电费", f"{result['energy_fee']:.2f} 元/年")
         c2.metric("容量电费", f"{result['capacity_fee']:.2f} 元/年")
@@ -795,7 +1216,7 @@ if calculate_tariff:
 
 # ---------------- 逐日源荷匹配图 ----------------
 if 'fin_res' in st.session_state:
-    st.subheader("📊 8. 逐日源荷匹配")
+    st.subheader("📊 7. 逐日源荷匹配")
 
     # ---- 初始化日期选择状态 ----
     if 'day_selector' not in st.session_state:
@@ -945,4 +1366,3 @@ if 'fin_res' in st.session_state:
     plt.tight_layout()
     _show_protected_figure(fig)
     plt.close(fig)
-    st.caption("逐日源荷匹配图仅供查看。如需下载图片，请联系开发者获取权限。")

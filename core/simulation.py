@@ -23,12 +23,15 @@ def simulate_8760(df_8760, cap_res, params):
     pv_gen_arr   = pv_kw   * pv_arr
     wind_gen_arr = wind_kw * wind_arr
 
+    direct_load = np.zeros(8760)
     bess_ch  = np.zeros(8760); bess_dis = np.zeros(8760)
     grid_buy = np.zeros(8760); curtail  = np.zeros(8760)
+    pv_curtail = np.zeros(8760); wind_curtail = np.zeros(8760)
 
     for t in range(8760):
         p_gen  = pv_gen_arr[t] + wind_gen_arr[t]
         p_load = load_arr[t]
+        direct_load[t] = min(p_gen, p_load)
         diff   = p_gen - p_load
         if diff > 0:
             max_ch = (bess_e_kwh * soc_max - soc) / eta_ch
@@ -36,6 +39,9 @@ def simulate_8760(df_8760, cap_res, params):
             soc += p_ch * eta_ch
             bess_ch[t] = p_ch
             curtail[t] = diff - p_ch
+            if p_gen > 0:
+                pv_curtail[t] = curtail[t] * pv_gen_arr[t] / p_gen
+                wind_curtail[t] = curtail[t] * wind_gen_arr[t] / p_gen
         else:
             deficit = -diff
             max_dis = (soc - bess_e_kwh * soc_min) * eta_dis
@@ -48,8 +54,13 @@ def simulate_8760(df_8760, cap_res, params):
         'hour':          np.arange(1, 8761),
         'pv_gen_wan':    pv_gen_arr   / 10000.0,
         'wind_gen_wan':  wind_gen_arr / 10000.0,
+        'pv_actual_wan': (pv_gen_arr - pv_curtail) / 10000.0,
+        'wind_actual_wan': (wind_gen_arr - wind_curtail) / 10000.0,
+        'pv_curtail_wan': pv_curtail / 10000.0,
+        'wind_curtail_wan': wind_curtail / 10000.0,
         'bess_ch_wan':   bess_ch      / 10000.0,
         'bess_dis_wan':  bess_dis     / 10000.0,
+        'direct_load_wan': direct_load / 10000.0,
         'grid_buy_wan':  grid_buy     / 10000.0,
         'curtail_wan':   curtail      / 10000.0,
         'load_wan':      load_arr     / 10000.0,

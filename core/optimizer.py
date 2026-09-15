@@ -15,6 +15,7 @@ def _to_summary(dispatch_df):
         'bess_dis_wan': [dispatch_df['bess_dis_wan'].sum()],
         'bess_ch_wan':  [dispatch_df['bess_ch_wan'].sum()],
         'curtail_wan':  [dispatch_df['curtail_wan'].sum()],
+        'direct_load_wan': [dispatch_df['direct_load_wan'].sum()],
     })
 
 
@@ -50,7 +51,10 @@ def optimize_capacity_heuristic(
         available_generation_kwh = (
             dispatch['pv_gen_wan'].sum() + dispatch['wind_gen_wan'].sum()
         ) * 1e4
-        self_use_kwh = total_load_kwh - grid_buy_kwh
+        self_use_kwh = (
+            dispatch['direct_load_wan'].sum()
+            + dispatch['bess_dis_wan'].sum()
+        ) * 1e4
         self_use_to_generation = (
             self_use_kwh / available_generation_kwh
             if available_generation_kwh > 0 else 0.0

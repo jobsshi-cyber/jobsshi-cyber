@@ -30,7 +30,9 @@ Thumbs.db
 
 # Temp
 ~$*.xlsx
+.streamlit_uploaded_data.xlsx
 
 # Output results
 全套财务测算表.xlsx
 新能源特性分析及容量优化结果表.xlsx
+.streamlit_uploaded_data_user*.xlsx
